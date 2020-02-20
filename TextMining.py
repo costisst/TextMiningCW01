@@ -6,6 +6,7 @@ Created on Sat Feb 15 21:30:25 2020
 """
 
 import string
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -119,11 +120,12 @@ torch.manual_seed(1)
 tags = []
 questions = []
 k = 2
-D = 300
+D = 100
 
 stopwords = read_file('D:/Msc_AI_UoM/Semester 2/Text mining/stopwords.txt')
 temp_questions = read_file('D:/Msc_AI_UoM/Semester 2/Text mining/questions.txt')
 temp_questions.pop()
+temp_questions = set(temp_questions)
 
 questions,tags ,my_dictionary = create_questions_tag_dict(temp_questions)
 
@@ -147,6 +149,13 @@ my_dictionary = {word: i for i, word in enumerate(vocab)}
 embedding_maxtrix = nn.Embedding(N, D)  
 
 
+training_questions = questions[:math.floor(0.9*len(questions))]
+training_tags = tags[:math.floor(0.9*len(tags))]
+
+testing_questions = questions[math.floor(0.9*len(questions)):]
+testing_tags = tags[math.floor(0.9*len(tags)):]
+
+
 # Produce the input vector
 bow_vec = bag_of_words(questions[0],my_dictionary,embedding_maxtrix)
 
@@ -155,19 +164,35 @@ unique_tags = set(tags)
 tag_dict = {word: i for i, word in enumerate(unique_tags)}
 
 
-model = nn.Sequential(nn.Linear(300, 100),
-                      nn.ReLU(),
-                      nn.Linear(100, 50),
+model = nn.Sequential(nn.Linear(D, 750),
+                      nn.ReLU(), 
+#                      nn.Linear(750, 750),
+#                      nn.ReLU(),
+                      nn.Linear(750, 50),
+#                      nn.ReLU(),           
+#                      nn.Linear(100, 50),
                       nn.LogSoftmax(dim=1))
 # Define the loss
 criterion = nn.NLLLoss()
 # Optimizers require the parameters to optimize and a learning rate
-optimizer = optim.SGD(model.parameters(), lr=0.003)
 
-epochs = 5
+
+learning_rate = [0.0001,0.001,0.01,0.1,1,5,10]
+optimizer = optim.Adam(model.parameters(),lr=0.0003)
+
+
+test_score = []
+train_score = []
+epochs = 10
 for e in range(epochs):
     running_loss = 0
-    for question, tag in zip(questions,tags):
+    count_samples = 0
+    count_correct = 0
+    count_samples_test = 0
+    count_correct_test = 0
+    for question, tag in zip(training_questions,training_tags):
+        
+        count_samples += 1
         # Flatten MNIST images into a 784 long vector
         bow_vec = bag_of_words(question,my_dictionary,embedding_maxtrix)
         
@@ -175,12 +200,59 @@ for e in range(epochs):
           
         # Training pass
         optimizer.zero_grad()
-        
         output = model(bow_vec.float())
+#        print(output)
         loss = criterion(output, tag_tens)
+        
+        if torch.eq(tag_tens, torch.exp(output).argmax()):
+            count_correct += 1
+#        print(loss)
         loss.backward()
         optimizer.step()
         
         running_loss += loss.item()
-    else:
-        print(f"Training loss: {running_loss/len(questions)}")
+    
+    
+    for question, tag in zip(testing_questions,testing_tags):
+            
+        count_samples_test += 1
+        # Flatten MNIST images into a 784 long vector
+        bow_vec = bag_of_words(question,my_dictionary,embedding_maxtrix)
+        
+        tag_tens = torch.tensor([tag_dict[tag]], dtype=torch.long)
+          
+        output = model(bow_vec.float())
+    #        print(output)
+        loss = criterion(output, tag_tens)
+        
+        if torch.eq(tag_tens, torch.exp(output).argmax()):
+            count_correct_test += 1
+            
+        running_loss += loss.item()
+    
+    test_score.append([count_correct_test/count_samples_test])
+    train_score.append([count_correct/count_samples])
+    print("Epochs: {0}".format(e))    
+    print("Training loss: {0}".format(count_correct/count_samples))
+    print("Testing loss: {0}".format(count_correct_test/count_samples_test))   
+#        print(f"Training loss: {running_loss/len(questions)}")
+        
+        
+        
+        
+        
+        
+        
+        
+        
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
